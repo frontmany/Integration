@@ -6,7 +6,7 @@
 
 ## Workflow
 
-![Workflow](docs/screenshots/workflow.png)
+![Workflow](docs/screenshots/workflow.jpg)
 
 1. Get Token получает Bearer токен для Report API. Логин и пароль берутся из `.env`.
 2. Get CMS Spares забирает все страницы `/cms/spares` с пагинацией, пока не придёт пустая страница.
@@ -21,7 +21,7 @@ Workflow запускается вручную или по расписанию 
 
 ## Результат
 
-![Результат](docs/screenshots/result.png)
+![Результат](docs/screenshots/result.jpg)
 
 ## Запуск
 
