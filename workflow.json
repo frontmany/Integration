@@ -1,5 +1,5 @@
 {
-  "name": "Spares Sync: CMS → History DB → Report API",
+  "name": "Spares Sync CMS History DB Report API",
   "nodes": [
     {
       "parameters": {},
@@ -10,7 +10,7 @@
         0
       ],
       "id": "02c816a8-3dc1-4c37-b911-43743e010f69",
-      "name": "When clicking ‘Execute workflow’"
+      "name": "Manual Trigger"
     },
     {
       "parameters": {
@@ -119,7 +119,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Сравнение данных CMS с БД исторических данных.\n// Результат: какие детали добавить, какие обновить, какие пометить удалёнными.\nconst cmsItems = $('Get CMS Spares').all()\n  .map(item => item.json)\n  .filter(item => item.spareCode);\n\n// При пустой таблице Postgres-нода отдаёт один пустой item (alwaysOutputData)\nconst dbItems = $('Get DB Spares').all()\n  .map(item => item.json)\n  .filter(item => item.id);\n\nconst cmsMap = new Map(cmsItems.map(item => [String(item.spareCode), item]));\nconst dbMap = new Map(dbItems.map(item => [String(item.id), item]));\n\nconst str = value => (value === null || value === undefined ? '' : String(value));\n\nfunction hasChanges(cms, db) {\n  return (\n    str(cms.spareName) !== str(db.name) ||\n    str(cms.spareDescription) !== str(db.description) ||\n    str(cms.spareType) !== str(db.type) ||\n    str(cms.spareStatus) !== str(db.status) ||\n    Number(cms.price) !== Number(db.price) ||\n    Number(cms.quantity) !== Number(db.quantity) ||\n    str(cms.updatedAt) !== str(db.updated_at)\n  );\n}\n\nconst toInsert = [];\nconst toUpdate = [];\nconst toDelete = [];\n\nfor (const [spareCode, cmsItem] of cmsMap) {\n  const dbItem = dbMap.get(spareCode);\n  if (!dbItem) {\n    toInsert.push(cmsItem);\n  } else if (dbItem.is_deleted || hasChanges(cmsItem, dbItem)) {\n    // деталь изменилась или вернулась в CMS после удаления\n    toUpdate.push(cmsItem);\n  }\n}\n\nfor (const [spareCode, dbItem] of dbMap) {\n  if (!cmsMap.has(spareCode) && !dbItem.is_deleted) {\n    toDelete.push(spareCode);\n  }\n}\n\nreturn [{\n  json: {\n    cms_count: cmsMap.size,\n    db_count: dbMap.size,\n    to_insert: toInsert,\n    to_update: toUpdate,\n    to_delete: toDelete,\n  },\n}];\n"
+        "jsCode": "// Сравнение данных CMS с БД исторических данных.\n// Результат: какие детали добавить, какие обновить, какие пометить удалёнными.\nconst cmsItems = $('Get CMS Spares').all()\n  .map(item => item.json)\n  .filter(item => item.spareCode);\n\n// При пустой таблице Postgres нода отдаёт один пустой item (alwaysOutputData)\nconst dbItems = $('Get DB Spares').all()\n  .map(item => item.json)\n  .filter(item => item.id);\n\nconst cmsMap = new Map(cmsItems.map(item => [String(item.spareCode), item]));\nconst dbMap = new Map(dbItems.map(item => [String(item.id), item]));\n\nconst str = value => (value === null || value === undefined ? '' : String(value));\n\nfunction hasChanges(cms, db) {\n  return (\n    str(cms.spareName) !== str(db.name) ||\n    str(cms.spareDescription) !== str(db.description) ||\n    str(cms.spareType) !== str(db.type) ||\n    str(cms.spareStatus) !== str(db.status) ||\n    Number(cms.price) !== Number(db.price) ||\n    Number(cms.quantity) !== Number(db.quantity) ||\n    str(cms.updatedAt) !== str(db.updated_at)\n  );\n}\n\nconst toInsert = [];\nconst toUpdate = [];\nconst toDelete = [];\n\nfor (const [spareCode, cmsItem] of cmsMap) {\n  const dbItem = dbMap.get(spareCode);\n  if (!dbItem) {\n    toInsert.push(cmsItem);\n  } else if (dbItem.is_deleted || hasChanges(cmsItem, dbItem)) {\n    // деталь изменилась или вернулась в CMS после удаления\n    toUpdate.push(cmsItem);\n  }\n}\n\nfor (const [spareCode, dbItem] of dbMap) {\n  if (!cmsMap.has(spareCode) && !dbItem.is_deleted) {\n    toDelete.push(spareCode);\n  }\n}\n\nreturn [{\n  json: {\n    cms_count: cmsMap.size,\n    db_count: dbMap.size,\n    to_insert: toInsert,\n    to_update: toUpdate,\n    to_delete: toDelete,\n  },\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -205,7 +205,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n    id AS \"spareCode\",\n    name AS \"spareName\",\n    COALESCE(description, '') AS \"spareDescription\",\n    COALESCE(type, '') AS \"spareType\",\n    COALESCE(status, '') AS \"spareStatus\",\n    trim_scale(price)::text AS \"price\",\n    quantity AS \"quantity\",\n    COALESCE(updated_at, '') AS \"updatedAt\"\nFROM spares_history\nORDER BY id;",
+        "query": "SELECT\n    id AS \"spareCode\",\n    name AS \"spareName\",\n    COALESCE(description, '') AS \"spareDescription\",\n    COALESCE(type, '') AS \"spareType\",\n    COALESCE(status, '') AS \"spareStatus\",\n    trim_scale(price)::text AS \"price\",\n    quantity AS \"quantity\",\n    COALESCE(updated_at, '') AS \"updatedAt\"\nFROM spares_history\nWHERE is_deleted = FALSE\nORDER BY id;",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
@@ -215,7 +215,7 @@
         0
       ],
       "id": "9037809b-1fff-4a12-b292-e8fc66ece18f",
-      "name": "Select History For Report",
+      "name": "Select Active For Report",
       "executeOnce": true,
       "credentials": {
         "postgres": {
@@ -226,7 +226,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// CSV для Report API: без заголовка, разделитель \";\", перевод строки \"\\n\", UTF-8 без BOM.\n// Стандартный \"Convert to File → CSV\" (SheetJS) всегда добавляет BOM,\n// из-за чего Report API не распознаёт код первой детали.\nconst FIELDS = ['spareCode', 'spareName', 'spareDescription', 'spareType',\n                'spareStatus', 'price', 'quantity', 'updatedAt'];\n\nconst escape = value => {\n  const s = value === null || value === undefined ? '' : String(value);\n  return /[;\"\\r\\n]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s;\n};\n\nconst rows = $input.all()\n  .map(item => item.json)\n  .filter(row => row.spareCode);\n\nconst csv = rows.map(row => FIELDS.map(field => escape(row[field])).join(';')).join('\\n');\n\nreturn [{ json: { rows: rows.length, csv } }];\n"
+        "jsCode": "// CSV для Report API: без заголовка, разделитель \";\", перевод строки \"\\n\", UTF 8 без BOM.\n// Стандартная операция Convert to File CSV всегда добавляет BOM,\n// из за чего Report API не распознаёт код первой детали.\nconst FIELDS = ['spareCode', 'spareName', 'spareDescription', 'spareType',\n                'spareStatus', 'price', 'quantity', 'updatedAt'];\n\nconst escape = value => {\n  const s = value === null || value === undefined ? '' : String(value);\n  return /[;\"\\r\\n]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"') + '\"' : s;\n};\n\nconst rows = $input.all()\n  .map(item => item.json)\n  .filter(row => row.spareCode);\n\nconst csv = rows.map(row => FIELDS.map(field => escape(row[field])).join(';')).join('\\n');\n\nreturn [{ json: { rows: rows.length, csv } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -290,7 +290,7 @@
   ],
   "pinData": {},
   "connections": {
-    "When clicking ‘Execute workflow’": {
+    "Manual Trigger": {
       "main": [
         [
           {
@@ -382,14 +382,14 @@
       "main": [
         [
           {
-            "node": "Select History For Report",
+            "node": "Select Active For Report",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Select History For Report": {
+    "Select Active For Report": {
       "main": [
         [
           {
